@@ -1,0 +1,715 @@
+{
+  "name": "My workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "functionCode": "// If multiple files are uploaded, split them into separate items.\n// Each item will have a single `binary.File`.\n\nconst binaryFields = Object.keys(items[0].binary);\nif (binaryFields.length === 0) {\n  return [{ json: { error: 'No file uploaded' } }];\n}\n\nreturn binaryFields.map((key) => {\n  return {\n    json: {},\n    binary: {\n      File: items[0].binary[key]\n    }\n  };\n});"
+      },
+      "id": "b59408dd-4f36-480e-80c8-01bfe9c6eeca",
+      "name": "Split Files1",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -1820,
+        360
+      ]
+    },
+    {
+      "parameters": {
+        "maxFileSize": 30000000,
+        "binaryPropertyName": "File"
+      },
+      "type": "n8n-nodes-image-sharp.imageSharp",
+      "typeVersion": 1,
+      "position": [
+        -420,
+        420
+      ],
+      "id": "2d840955-146c-411c-b17b-271fffccc7db",
+      "name": "Optional: Image Sharp",
+      "executeOnce": true
+    },
+    {
+      "parameters": {
+        "inputDataFieldName": "File",
+        "name": "={{ $json.date_value }}-{{ $json.supplier_name_value }}-{{ $json.total_amount_value }}",
+        "driveId": {
+          "__rl": true,
+          "value": "1map9T6sl4Tg4zE4ZgHCRRoK7FPoxPrO-",
+          "mode": "id"
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "1nv8oiycIUGsaRBXHY9Ie2PXngqt4Hfcc",
+          "mode": "id"
+        },
+        "options": {}
+      },
+      "id": "841f32d6-ff1a-4216-8296-0b35e8dce7c2",
+      "name": "Optional: Upload to Google Drive",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 3,
+      "position": [
+        -280,
+        420
+      ],
+      "executeOnce": false,
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "AUa31meOJrVQ7frX",
+          "name": "Google Drive account 2"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "databaseId": 190848,
+        "tableId": 462463,
+        "dataToSend": "autoMapInputData"
+      },
+      "id": "f624db44-825a-4084-8bae-64aad30859b7",
+      "name": "Baserow (Create Record)",
+      "type": "n8n-nodes-base.baserow",
+      "position": [
+        -140,
+        420
+      ],
+      "typeVersion": 1,
+      "credentials": {
+        "baserowApi": {
+          "id": "b0hXGiFlIw6qzu80",
+          "name": "Baserow account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "mergeByIndex"
+      },
+      "id": "482f2821-bf50-4729-a17b-401c17de6056",
+      "name": "Merge Final Data",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 1,
+      "position": [
+        -560,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "keepOnlySet": true,
+        "values": {
+          "string": [
+            {
+              "name": "category_value",
+              "value": "={{ $json.document.inference.prediction.category.value }}"
+            },
+            {
+              "name": "category_confidence",
+              "value": "={{ $json.document.inference.prediction.category.confidence }}"
+            },
+            {
+              "name": "document_type_value",
+              "value": "={{ $json.document.inference.prediction.document_type.value }}"
+            },
+            {
+              "name": "document_type_confidence",
+              "value": "={{ $json.document.inference.prediction.document_type.confidence }}"
+            },
+            {
+              "name": "locale_value",
+              "value": "={{ $json.document.inference.prediction.locale.value }}"
+            },
+            {
+              "name": "receipt_number_value",
+              "value": "={{ $json.document.inference.prediction.receipt_number.value }}"
+            },
+            {
+              "name": "supplier_name_value",
+              "value": "={{ $json.document.inference.prediction.supplier_name.value }}"
+            },
+            {
+              "name": "total_amount_value",
+              "value": "={{ $json.document.inference.prediction.total_amount.value }}"
+            },
+            {
+              "name": "line_items",
+              "value": "={{ JSON.stringify($json.document.inference.prediction.line_items) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "1756555b-5d59-4857-82b2-42d90012cfa4",
+      "name": "Extract Additional Fields",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 1,
+      "position": [
+        -1360,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Parse final cost category from text.\n\nconst content = items[0].json?.choices?.[0]?.message?.content || \"\";\n\n// E.g. matching a 6-digit category.\nconst costCategoryMatch = content.match(/\\d{6}/);\nconst costCategoryNumber = costCategoryMatch ? costCategoryMatch[0] : \"Unknown\";\n\n// Possibly parse reasoning after \"**Confirmation:**\"\nconst confirmationIndex = content.indexOf(\"**Confirmation:**\");\nconst reasoning = (confirmationIndex !== -1)\n  ? content.substring(confirmationIndex + \"**Confirmation:**\".length).trim()\n  : \"No reasoning provided\";\n\nreturn [{\n  json: {\n    costCategoryNumber,\n    reasoning\n  }\n}];"
+      },
+      "id": "2a427200-c205-41d2-88ee-230419f63217",
+      "name": "Extract Final Cost Category",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        500,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer sk-or-v1-YYYYYYYYYYYY"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {}
+      },
+      "id": "691343aa-72cc-425a-a8ba-40d074392717",
+      "name": "DeepSeek Request",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        300,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "// Combine multiple model responses into one final prompt for cost category selection.\n\nconst responses = items.map((itm) => itm.json);\n\n// Simple example categories\nconst COSTCATEGORIES = [\n  {\"typeNumber\": 423900, \"typeDescription\": \"Team Costs\"},\n  {\"typeNumber\": 423910, \"typeDescription\": \"Jubilee Costs\"},\n  {\"typeNumber\": 423920, \"typeDescription\": \"Canteen Costs\"}\n];\n\nconst categoriesString = COSTCATEGORIES.map((c) => `${c.typeNumber} - ${c.typeDescription}`).join(\"\\n\");\n\nconst contents = responses.map((r) => {\n  const model = r.model || \"Unknown Model\";\n  const content = r?.choices?.[0]?.message?.content || \"No content\";\n  return `${model}:\\n${content}`;\n});\n\nlet promptText;\nif (contents.length > 1) {\n  promptText = `Multiple model outputs. Decide final COSTCATEGORY.\\nOutputs:\\n${contents.join(\"\\n\\n\")}\\nOptions:\\n${categoriesString}`;\n} else {\n  promptText = `Single model output. Confirm best COSTCATEGORY.\\nOutput:\\n${contents[0]}\\nOptions:\\n${categoriesString}`;\n}\n\nreturn [{\n  json: {\n    model: \"google/gemini-2.0-flash-001\",\n    messages: [\n      {\n        role: \"user\",\n        content: [\n          { type: \"text\", text: promptText },\n          { type: \"image_url\", image_url: { url: $item(0).$node[\"ExtractBoundingBox\"].json.imageData || \"\" } }\n        ]\n      }\n    ]\n  }\n}];"
+      },
+      "id": "45cfcf45-7fa1-498f-9c5b-cde1e46f9895",
+      "name": "Build Payload",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        100,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer sk-or-v1-XXXXXXXXX"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": [\n        {\n          \"type\": \"text\",\n          \"text\": \"You are doing the booking for Kwintes ... (COSTCATEGORIES).\"\n        },\n        {\n          \"type\": \"image_url\",\n          \"image_url\": {\n            \"url\": \"data:image/jpeg;base64,{{ $json.imageData }}\"\n          }\n        }\n      ]\n    }\n  ],\n  \"model\": \"qwen/qwen2.5-vl-72b-instruct:free\"\n}",
+        "options": {}
+      },
+      "id": "715f1c08-5f08-4c91-8202-1b308e4e574e",
+      "name": "Call Together.ai",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -100,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer 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"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"messages\": [\n    {\n      \"role\": \"user\",\n      \"content\": [\n        {\n          \"type\": \"text\",\n          \"text\": \"Analyze the provided image in exhaustive detail ... (COSTCATEGORIES).\"\n        },\n        {\n          \"type\": \"image_url\",\n          \"image_url\": {\n            \"url\": \"data:image/jpeg;base64,{{ $json.imageData }}\"\n          }\n        }\n      ]\n    }\n  ],\n  \"model\": \"llama-3.2-90b-vision-preview\"\n}",
+        "options": {}
+      },
+      "id": "e8b70afe-b84d-45c1-a692-af1d990ed759",
+      "name": "Call GROQ LLAVA",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        -120,
+        0
+      ],
+      "typeVersion": 4.2,
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "url": "={{ 'http://api.resmush.it/ws.php?im' + $json.data.url }}",
+        "options": {}
+      },
+      "id": "eeb7fd99-7b61-4415-9558-3beb67299b47",
+      "name": "ReSmush.it Image Optimisation1",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [
+        -280,
+        240
+      ],
+      "typeVersion": 4.2
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.imgbb.com/1/upload",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "expiration",
+              "value": "15552000"
+            },
+            {
+              "name": "key",
+              "value": "083b47be1f08182f8a6d6e3e5da2e1b0"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "multipart-form-data",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "image",
+              "value": "={{ $json.File }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "6c164d1a-9583-42f9-b30e-8ccf9bb8725d",
+      "name": "Upload to ImgBB",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -420,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "crop",
+        "dataPropertyName": "=File",
+        "width": "={{ $json.cropArea.width }}",
+        "height": "={{ $json.cropArea.height }}",
+        "positionX": "={{ $json.cropArea.left }}",
+        "positionY": "={{ $json.cropArea.top }}",
+        "options": {}
+      },
+      "id": "d59817c6-468c-49f0-af08-752793f596f2",
+      "name": "Crop with Bounding Box",
+      "type": "n8n-nodes-base.editImage",
+      "typeVersion": 1,
+      "position": [
+        -560,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "mergeByIndex"
+      },
+      "id": "596e4c79-e159-43cf-8de7-e80162a275d6",
+      "name": "Merge (Mindee + Size)",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 1,
+      "position": [
+        -1340,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.mindee.net/v1/products/mindee/expense_receipts/v5/predict",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "cropper",
+              "value": "true"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Token fbfdca9b9a8bd7d782567c04a1b8d47b"
+            },
+            {
+              "name": "content-type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "form-urlencoded",
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "document",
+              "value": "={{ $json.File }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "ae736e8e-294c-4192-84e0-0d697ccbf8a4",
+      "name": "Send to Mindee",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1540,
+        560
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "information",
+        "dataPropertyName": "=File"
+      },
+      "id": "5a8a0d94-3795-426e-bbca-227635c9192b",
+      "name": "Get Image Size",
+      "type": "n8n-nodes-base.editImage",
+      "typeVersion": 1,
+      "position": [
+        -1500,
+        140
+      ],
+      "executeOnce": false
+    },
+    {
+      "parameters": {
+        "operation": "binaryToPropery",
+        "binaryPropertyName": "File",
+        "destinationKey": "File",
+        "options": {
+          "encoding": "utf8",
+          "keepSource": "binary"
+        }
+      },
+      "id": "25c4747e-898a-48f2-a9c7-6b0dfce94ea4",
+      "name": "Convert Image to Base64",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [
+        -1700,
+        360
+      ],
+      "executeOnce": false
+    },
+    {
+      "parameters": {
+        "formTitle": "Upload Image",
+        "formFields": {
+          "values": [
+            {
+              "fieldLabel": "File",
+              "fieldType": "file",
+              "acceptFileTypes": ".jpeg,.jpg,.png",
+              "requiredField": true
+            }
+          ]
+        },
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "b1cbdf5a-658a-4c8b-8f78-3370d07cea57",
+      "name": "On form submission (Upload Image)",
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.2,
+      "position": [
+        -1960,
+        360
+      ],
+      "webhookId": "unique-webhook-id"
+    },
+    {
+      "parameters": {
+        "jsCode": "/*******************************************************\n * Process multiple images dynamically:\n * - For each image, calculate the pixel-based cropArea using:\n *     • its size from data.size.width & data.size.height\n *     • its normalized bounding box from:\n *       data.document.inference.pages[0].extras.cropper.cropping[0].bounding_box\n * - Also pass along the imageData from the earlier (single) conversion.\n *******************************************************/\nconst outputItems = [];\n\nfor (const item of items) {\n  const data = item.json;\n  \n  // Get real image dimensions from data.size:\n  const imgWidth = data.size?.width || 1;\n  const imgHeight = data.size?.height || 1;\n  \n  // Retrieve the bounding box array from the Mindee data.\n  // Expected path: document.inference.pages[0].extras.cropper.cropping[0].bounding_box\n  const boundingInfo = data.document?.inference?.pages?.[0]?.extras?.cropper?.cropping?.[0]?.bounding_box;\n  \n  // If no valid bounding box is found, output an error for this item.\n  if (!boundingInfo || boundingInfo.length < 4) {\n    outputItems.push({\n      json: {\n        error: 'No valid bounding box array found for this item!',\n        original: data,\n      },\n    });\n    continue;\n  }\n  \n  // Convert normalized coordinates to pixel coordinates.\n  // (Assumes boundingInfo order is: [top-left, top-right, bottom-right, bottom-left])\n  const left = Math.round(boundingInfo[0][0] * imgWidth);\n  const top = Math.round(boundingInfo[0][1] * imgHeight);\n  const width = Math.round((boundingInfo[1][0] - boundingInfo[0][0]) * imgWidth);\n  const height = Math.round((boundingInfo[2][1] - boundingInfo[0][1]) * imgHeight);\n  \n  // Retrieve the converted image data (Base64) that was already produced.\n  // Ensure that the node converting to Base64 runs only once.\n  const imageData = data.imageData || \"\";\n  \n  outputItems.push({\n    json: {\n      ...data, // Optionally include all original data.\n      cropArea: { left, top, width, height },\n      imageData, // Pass along the Base64 image if available.\n    },\n    // Optionally, if you need the original binary too:\n    // binary: item.binary\n  });\n}\n\nreturn outputItems;\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -880,
+        140
+      ],
+      "id": "3990ecb9-53f6-40a0-9495-0a412506dd8d",
+      "name": "Code2"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Split Files1": {
+      "main": [
+        [
+          {
+            "node": "Convert Image to Base64",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Optional: Image Sharp": {
+      "main": [
+        [
+          {
+            "node": "Optional: Upload to Google Drive",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Optional: Upload to Google Drive": {
+      "main": [
+        [
+          {
+            "node": "Baserow (Create Record)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Final Data": {
+      "main": [
+        [
+          {
+            "node": "Optional: Image Sharp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Additional Fields": {
+      "main": [
+        [
+          {
+            "node": "Merge Final Data",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Extract Final Cost Category": {
+      "main": [
+        [
+          {
+            "node": "Merge Final Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DeepSeek Request": {
+      "main": [
+        [
+          {
+            "node": "Extract Final Cost Category",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Payload": {
+      "main": [
+        [
+          {
+            "node": "DeepSeek Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Together.ai": {
+      "main": [
+        [
+          {
+            "node": "Build Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call GROQ LLAVA": {
+      "main": [
+        [
+          {
+            "node": "Build Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ReSmush.it Image Optimisation1": {
+      "main": [
+        [
+          {
+            "node": "Call GROQ LLAVA",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Call Together.ai",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upload to ImgBB": {
+      "main": [
+        [
+          {
+            "node": "ReSmush.it Image Optimisation1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Crop with Bounding Box": {
+      "main": [
+        [
+          {
+            "node": "Upload to ImgBB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge (Mindee + Size)": {
+      "main": [
+        [
+          {
+            "node": "Code2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send to Mindee": {
+      "main": [
+        [
+          {
+            "node": "Extract Additional Fields",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Merge (Mindee + Size)",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Get Image Size": {
+      "main": [
+        [
+          {
+            "node": "Merge (Mindee + Size)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert Image to Base64": {
+      "main": [
+        [
+          {
+            "node": "Get Image Size",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send to Mindee",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "On form submission (Upload Image)": {
+      "main": [
+        [
+          {
+            "node": "Split Files1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code2": {
+      "main": [
+        [
+          {
+            "node": "Crop with Bounding Box",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "",
+  "meta": {
+    "instanceId": "5d8c51c1a44d4bf5a4c625b53a02d321754256ca255f6131d9c86b210948e4ea"
+  },
+  "tags": []
+}
